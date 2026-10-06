@@ -1,0 +1,36 @@
+{
+  "name": "water-elf",
+  "version": "0.1.0",
+  "description": "養一隻喝水精靈：/water 記一杯，喝越多越開心、達標天數讓它進化",
+  "userConfig": {
+    "dailyGoalMl": {
+      "type": "number",
+      "title": "每日目標 (ml)",
+      "description": "一天要喝多少毫升",
+      "default": 2000
+    },
+    "servingMl": {
+      "type": "number",
+      "title": "一杯/瓶的容量 (ml)",
+      "description": "/water 一次記多少毫升",
+      "default": 250
+    },
+    "servingUnit": {
+      "type": "string",
+      "title": "單位",
+      "description": "文案用「杯」或「瓶」",
+      "options": [
+        "杯",
+        "瓶"
+      ],
+      "default": "杯"
+    },
+    "remindMinutes": {
+      "type": "number",
+      "title": "提醒間隔 (分鐘)",
+      "description": "超過幾分鐘沒喝就提醒，0 = 不提醒",
+      "default": 90
+    }
+  },
+  "types": "./types/index.d.ts"
+}
