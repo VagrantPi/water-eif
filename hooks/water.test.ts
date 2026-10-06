@@ -33,7 +33,8 @@ test('連續達標與進化', () => {
   expect(reachGoal({ ...yesterday, lastGoalDay: 'day:2026-01-01' }, NOW).streak).toBe(1)
   expect(stageOf(0).name).toBe('青苔寶寶')
   expect(stageOf(3).name).toBe('水精靈')
-  expect(stageOf(30).name).toBe('珊瑚精靈')
+  expect(stageOf(30).name).toBe('晨光精靈')
+  expect(stageOf(60).name).toBe('珊瑚精靈')
 })
 
 test('像素格編碼：14x8 格，每格 12 bytes', () => {

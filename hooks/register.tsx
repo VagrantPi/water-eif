@@ -14,8 +14,8 @@ const ROWS = HEIGHT / 2
 export const STAGES = [
   { days: 0, color: 'green', name: '青苔寶寶' },
   { days: 3, color: 'blue', name: '水精靈' },
-  { days: 7, color: 'yellow', name: '晨光精靈' },
-  { days: 14, color: 'red', name: '珊瑚精靈' },
+  { days: 14, color: 'yellow', name: '晨光精靈' },
+  { days: 60, color: 'red', name: '珊瑚精靈' },
 ] as const
 
 const LINES: Record<Mood, string> = {
