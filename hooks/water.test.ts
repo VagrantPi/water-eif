@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { dayKey, encode, frameOf, moodAt, parseServings, reachGoal, stageOf } from './register'
+import { CELEBRATE_COLS, CELEBRATE_ROWS, celebrate, dayKey, encode, frameOf, moodAt, parseServings, reachGoal, stageOf } from './register'
 
 const MIN = 60 * 1000
 const NOW = new Date(2026, 9, 6, 9, 0).getTime()
@@ -41,6 +41,22 @@ test('像素格編碼：14x8 格，每格 12 bytes', () => {
   expect(cells.length).toBe(Math.ceil((14 * 8 * 12) / 3) * 4)
   // 口渴動畫停在攤平那格
   expect(frameOf('thirsty', 'blue', 99)).toBe(frameOf('thirsty', 'blue', 6))
+  expect(celebrate('blue', 0).length).toBe(Math.ceil((CELEBRATE_COLS * CELEBRATE_ROWS * 12) / 3) * 4)
+})
+
+test('達標後面板換成今日完成慶祝畫面', { options: { dailyGoalMl: 500, servingMl: 500 } }, async ($, on) => {
+  const { clock } = engine(on)
+  await start($)
+  await water($)
+  // 喝完先跳 3 秒，之後進入慶祝
+  await clock.advance(3200)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const pane = await mountBand($, surface)
+    expect(await pane.find({ text: '★ 今日完成 ★' })).toBeDefined()
+    expect(await pane.find({ text: '連續 1 天達標' })).toBeDefined()
+  }
+  // 星星每 3 格換一次字，跑一輪確認每種字元都能被終端機接受
+  await clock.advance(12 * 150)
 })
 
 const engine = (on: On) => {
@@ -86,7 +102,7 @@ test('喝到目標：累計達標 +1，訊息有進度', { options: { dailyGoalM
   expect(second.text).toContain('2/2 瓶 (1000/1000ml)')
   expect(second.text).toContain('今日目標達成')
   const band = await mountBand($, 'terminal')
-  expect(await band.find({ text: '累計達標 1 天 · 連續 1 天' })).toBeDefined()
+  expect(await band.find({ text: '連續 1 天達標' })).toBeDefined()
   expect((await water($, 'abc')).text).toContain('用法')
 })
 

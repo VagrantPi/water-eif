@@ -23,6 +23,7 @@ const LINES: Record<Mood, string> = {
   happy: '水水的好舒服 ✨',
   idle: '在旁邊陪你寫 code',
   thirsty: '好渴…快融化了…',
+  done: '今天喝夠了，精靈閃閃發亮 🎉',
 }
 
 const ANIM: Record<Mood, 'walk' | 'gesture' | 'idle' | 'death'> = {
@@ -30,6 +31,7 @@ const ANIM: Record<Mood, 'walk' | 'gesture' | 'idle' | 'death'> = {
   happy: 'gesture',
   idle: 'idle',
   thirsty: 'death',
+  done: 'walk',
 }
 
 const today = atom({ plugin: 'water-elf', key: 'today' } as const, { totalMl: 0, log: [] })
@@ -74,28 +76,71 @@ const liveStreak = (st: Stats, now: number) =>
 const DIGITS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const DEFAULT = 0x01000000
 const cache = new Map<string, string>()
+const pixel = (ch: string | undefined) => (ch === undefined || ch === '.' ? null : (PALETTE[DIGITS.indexOf(ch)] ?? null))
 
-// 一格放上下兩個像素：▀ 前景是上、背景是下
-export const encode = (frame: string) => {
-  const hit = cache.get(frame)
-  if (hit) return hit
-  const color = (ch: string | undefined) => (ch === undefined || ch === '.' ? null : (PALETTE[DIGITS.indexOf(ch)] ?? null))
-  const words = new Uint32Array(WIDTH * ROWS * 3)
-  for (let cy = 0; cy < ROWS; cy++) {
-    for (let cx = 0; cx < WIDTH; cx++) {
-      const top = color(frame[2 * cy * WIDTH + cx])
-      const bottom = color(frame[(2 * cy + 1) * WIDTH + cx])
-      const i = (cy * WIDTH + cx) * 3
-      if (top === null && bottom === null) words.set([0x20, DEFAULT, DEFAULT], i)
+// 一格放上下兩個像素：▀ 前景是上、背景是下；glyphs 只畫在全透明的格子上
+const toCells = (cols: number, rows: number, px: (number | null)[], glyphs = new Map<number, [number, number]>()) => {
+  const words = new Uint32Array(cols * rows * 3)
+  for (let cy = 0; cy < rows; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const top = px[2 * cy * cols + cx] ?? null
+      const bottom = px[(2 * cy + 1) * cols + cx] ?? null
+      const cell = cy * cols + cx
+      const glyph = glyphs.get(cell)
+      const i = cell * 3
+      if (top === null && bottom === null) words.set(glyph ? [glyph[0], glyph[1], DEFAULT] : [0x20, DEFAULT, DEFAULT], i)
       else if (top === null) words.set([0x2584, bottom ?? DEFAULT, DEFAULT], i)
       else words.set([0x2580, top, bottom ?? DEFAULT], i)
     }
   }
   // 執行環境有 Uint8Array#toBase64（ES2026），TS lib 還沒收錄
-  const cells = (new Uint8Array(words.buffer) as Uint8Array & { toBase64(): string }).toBase64()
+  return (new Uint8Array(words.buffer) as Uint8Array & { toBase64(): string }).toBase64()
+}
+
+export const encode = (frame: string) => {
+  const hit = cache.get(frame)
+  if (hit) return hit
+  const cells = toCells(WIDTH, ROWS, Array.from(frame, pixel))
   cache.set(frame, cells)
   return cells
 }
+
+// 達標慶祝：精靈在中間跳、旁邊星星閃、底下兩排水波往左流
+export const CELEBRATE_COLS = 22
+export const CELEBRATE_ROWS = 10
+const SPRITE_X = 4
+const WAVE_CREST = 0x9be7ff
+const WAVE_DEEP = 0x2f7fd6
+const SPARKLE_COLORS = [0xffd75f, 0xfff3b0]
+const SPARKLE_CHARS = [0x2726, 0x2727, 0x2b, 0x20] // ✦ ✧ + 空白
+const SPARKLES: [number, number][] = [[1, 0], [20, 1], [3, 3], [18, 3], [0, 5], [21, 5], [2, 7], [19, 7]]
+
+export const celebrate = (color: (typeof STAGES)[number]['color'], tick: number) => {
+  const cols = CELEBRATE_COLS
+  const px: (number | null)[] = new Array(cols * CELEBRATE_ROWS * 2).fill(null)
+  const frame = frameOf('done', color, tick)
+  for (let y = 0; y < HEIGHT; y++) {
+    for (let x = 0; x < WIDTH; x++) {
+      const c = pixel(frame[y * WIDTH + x])
+      if (c !== null) px[y * cols + x + SPRITE_X] = c
+    }
+  }
+  for (let x = 0; x < cols; x++) {
+    const crest = 17 + Math.round(Math.sin((x + tick / 2) * 0.6))
+    for (let y = crest; y < CELEBRATE_ROWS * 2; y++) px[y * cols + x] = y === crest ? WAVE_CREST : WAVE_DEEP
+  }
+  const glyphs = new Map<number, [number, number]>()
+  SPARKLES.forEach(([cx, cy], i) => {
+    const phase = (Math.floor(tick / 3) + i) % SPARKLE_CHARS.length
+    glyphs.set(cy * cols + cx, [SPARKLE_CHARS[phase] ?? 0x20, SPARKLE_COLORS[i % 2] ?? DEFAULT])
+  })
+  return toCells(cols, CELEBRATE_ROWS, px, glyphs)
+}
+
+const cellsOf = (m: Mood, color: (typeof STAGES)[number]['color'], tick: number) =>
+  m === 'done'
+    ? { cells: celebrate(color, tick), columns: CELEBRATE_COLS, rows: CELEBRATE_ROWS }
+    : { cells: encode(frameOf(m, color, tick)), columns: WIDTH, rows: ROWS }
 
 // 口渴動畫播到攤平那格就停住
 export const frameOf = (m: Mood, color: (typeof STAGES)[number]['color'], tick: number) => {
@@ -141,7 +186,8 @@ async function refresh($: EngineInterface, cfg: Config) {
   $.ui.status(progress(cfg, day))
 
   const lastAt = day.log.at(-1)?.at
-  const next: Mood = now < cheerUntil ? 'cheer' : moodAt(now, lastAt, startedAt, cfg.thirstyMs)
+  const next: Mood =
+    now < cheerUntil ? 'cheer' : day.totalMl >= cfg.goalMl ? 'done' : moodAt(now, lastAt, startedAt, cfg.thirstyMs)
   if ((await read($, mood)) !== next) await update($, mood, () => next)
 
   const quietSince = Math.max(lastAt ?? startedAt, nudgedAt)
@@ -158,9 +204,7 @@ async function animate($: EngineInterface) {
   const result = await $.ui.blit({
     requestId: shown.requestId,
     key: 'elf',
-    cells: encode(frameOf(shown.mood, shown.color, tick)),
-    columns: WIDTH,
-    rows: ROWS,
+    ...cellsOf(shown.mood, shown.color, tick),
   })
   // 橫幅收起來了就停，下次 render 再接上
   if ('deny' in result && band === shown) band = undefined
@@ -232,11 +276,17 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'water-elf' }, async $ => {
-    const hidden = (await $.ui.panes()).some(pane => pane.id === PANE)
+    // 開了但還沒擺上畫面（例如寬度不夠在等）的也算沒顯示，要重開而不是關掉
+    const pane = (await $.ui.panes()).find(one => one.id === PANE)
+    const hidden = pane?.isPlaced === true
     await $.store.set('hidden', hidden)
-    if (hidden) await $.ui.close({ id: PANE })
-    else await $.ui.open({ id: PANE, title: PANE_TITLE, columns: 38 })
-    return { text: hidden ? '精靈去休息了，再打 /water-elf 叫它回來' : '精靈回來了 💧' }
+    if (hidden) {
+      await $.ui.close({ id: PANE })
+      return { text: '精靈去休息了，再打 /water-elf 叫它回來' }
+    }
+    if (pane) await $.ui.close({ id: PANE })
+    const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, columns: 38 })
+    return { text: opened.isPlaced ? '精靈回來了 💧' : `精靈面板開不出來：${opened.reason}` }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -248,7 +298,18 @@ export const register: Register = (on, options) => {
     const ratio = day.totalMl / goalMl
 
     const { Box, Text } = $.ui.resolve(e)
-    const info = (
+    const info = ratio >= 1 ? (
+      <Box flexDirection="column">
+        <Text bold>★ 今日完成 ★</Text>
+        <Text>
+          💧 {servingsOf(cfg, day.totalMl)}/{cfg.goalServings} {unit} · {day.totalMl}ml
+        </Text>
+        <Text>連續 {liveStreak(st, now)} 天達標</Text>
+        <Text dimColor>
+          {stage.name} · 累計達標 {st.goalDays} 天
+        </Text>
+      </Box>
+    ) : (
       <Box flexDirection="column">
         <Box gap={1}>
           <Text bold>{stage.name}</Text>
@@ -259,7 +320,7 @@ export const register: Register = (on, options) => {
         <Text>
           {bar(ratio, 12)} {servingsOf(cfg, day.totalMl)}/{cfg.goalServings} {unit}
         </Text>
-        <Text dimColor>{ratio >= 1 ? '今天喝夠了，精靈閃閃發亮 🎉' : LINES[m]}</Text>
+        <Text dimColor>{LINES[m]}</Text>
         {nextStage && (
           <Text dimColor>
             再達標 {nextStage.days - st.goalDays} 天進化成「{nextStage.name}」
@@ -280,7 +341,7 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column" gap={1} paddingX={2}>
-        <Raster key="elf" columns={WIDTH} rows={ROWS} cells={encode(frameOf(m, stage.color, tick))} />
+        <Raster key="elf" {...cellsOf(m, stage.color, tick)} />
         {info}
       </Box>
     )
