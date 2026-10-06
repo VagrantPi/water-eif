@@ -1,0 +1,5 @@
+{
+  "name": "water-elf",
+  "owner": { "name": "VagrantPi" },
+  "plugins": [{ "name": "water-elf", "source": "./" }]
+}
