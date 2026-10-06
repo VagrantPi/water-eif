@@ -166,6 +166,8 @@ type Config = {
 let startedAt = 0
 let nudgedAt = 0
 let cheerUntil = 0
+let demoUntil = 0
+const DEMO_MS = 10 * 1000
 // 動畫目前畫在哪、畫什麼；render 時同步，計時器拿來 blit
 let band: { requestId: string; mood: Mood; color: (typeof STAGES)[number]['color'] } | undefined
 let tick = 0
@@ -187,7 +189,11 @@ async function refresh($: EngineInterface, cfg: Config) {
 
   const lastAt = day.log.at(-1)?.at
   const next: Mood =
-    now < cheerUntil ? 'cheer' : day.totalMl >= cfg.goalMl ? 'done' : moodAt(now, lastAt, startedAt, cfg.thirstyMs)
+    now < demoUntil || (now >= cheerUntil && day.totalMl >= cfg.goalMl)
+      ? 'done'
+      : now < cheerUntil
+        ? 'cheer'
+        : moodAt(now, lastAt, startedAt, cfg.thirstyMs)
   if ((await read($, mood)) !== next) await update($, mood, () => next)
 
   const quietSince = Math.max(lastAt ?? startedAt, nudgedAt)
@@ -225,10 +231,11 @@ export const register: Register = (on, options) => {
   const { unit } = cfg
   band = undefined
   tick = 0
+  demoUntil = 0
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'water', description: `喝了一${unit}水就打 /water（可加份數，例如 /water 2）` })
-    await $.command.register({ name: 'water-elf', description: '顯示／隱藏右側的喝水精靈' })
+    await $.command.register({ name: 'water-elf', description: '顯示／隱藏右側的喝水精靈；/water-elf demo 預覽今日完成畫面' })
 
     startedAt = await $.clock.now()
     nudgedAt = startedAt
@@ -275,7 +282,21 @@ export const register: Register = (on, options) => {
     return { text: `已記 ${servings} ${unit}水 (+${ml}ml)　${progress(cfg, updated)}${done}${evolved}` }
   })
 
-  on('command.run', { command: 'water-elf' }, async $ => {
+  on('command.run', { command: 'water-elf' }, async ($, e) => {
+    // demo：播 10 秒慶祝畫面，不寫入任何紀錄
+    if (e.args.trim() === 'demo') {
+      const pane = (await $.ui.panes()).find(one => one.id === PANE)
+      if (!pane?.isPlaced) {
+        if (pane) await $.ui.close({ id: PANE })
+        const opened = await $.ui.open({ id: PANE, title: PANE_TITLE, columns: 38 })
+        if (!opened.isPlaced) return { text: `精靈面板開不出來：${opened.reason}` }
+      }
+      demoUntil = (await $.clock.now()) + DEMO_MS
+      await refresh($, cfg)
+      $.clock.after(DEMO_MS + 100, () => void refresh($, cfg))
+      return { text: '播放 10 秒今日完成預覽 ✨（不會記錄）' }
+    }
+
     // 開了但還沒擺上畫面（例如寬度不夠在等）的也算沒顯示，要重開而不是關掉
     const pane = (await $.ui.panes()).find(one => one.id === PANE)
     const hidden = pane?.isPlaced === true
@@ -298,33 +319,17 @@ export const register: Register = (on, options) => {
     const ratio = day.totalMl / goalMl
 
     const { Box, Text } = $.ui.resolve(e)
-    const info = ratio >= 1 ? (
+    const isDemo = now < demoUntil
+    const info = (
       <Box flexDirection="column">
-        <Text bold>★ 今日完成 ★</Text>
-        <Text>
-          💧 {servingsOf(cfg, day.totalMl)}/{cfg.goalServings} {unit} · {day.totalMl}ml
-        </Text>
-        <Text>連續 {liveStreak(st, now)} 天達標</Text>
-        <Text dimColor>
-          {stage.name} · 累計達標 {st.goalDays} 天
-        </Text>
-      </Box>
-    ) : (
-      <Box flexDirection="column">
-        <Box gap={1}>
-          <Text bold>{stage.name}</Text>
-          <Text dimColor>
-            累計達標 {st.goalDays} 天 · 連續 {liveStreak(st, now)} 天
-          </Text>
-        </Box>
-        <Text>
-          {bar(ratio, 12)} {servingsOf(cfg, day.totalMl)}/{cfg.goalServings} {unit}
-        </Text>
+        <Text bold>{ratio >= 1 || isDemo ? `★ 今日完成 ★${isDemo ? '（預覽）' : ''}` : '☆ 今日進行中'}</Text>
+        <Text>{`${bar(ratio, 12)} ${servingsOf(cfg, day.totalMl)}/${cfg.goalServings} ${unit}`}</Text>
+        <Text>{`💧 ${day.totalMl} / ${goalMl}ml`}</Text>
+        <Text>{`連續 ${liveStreak(st, now)} 天達標`}</Text>
+        <Text dimColor>{`${stage.name} · 累計達標 ${st.goalDays} 天`}</Text>
         <Text dimColor>{LINES[m]}</Text>
         {nextStage && (
-          <Text dimColor>
-            再達標 {nextStage.days - st.goalDays} 天進化成「{nextStage.name}」
-          </Text>
+          <Text dimColor>{`再達標 ${nextStage.days - st.goalDays} 天進化成「${nextStage.name}」`}</Text>
         )}
       </Box>
     )

@@ -85,9 +85,9 @@ const mountBand = ($: Engine, surface: 'terminal' | 'desktop') =>
     requestId: 'water-elf',
     props: { title: '💧 喝水精靈', isFocused: false, bodyColumns: 34, placement: 'dock' } as never,
   })
-const water = ($: Engine, args = '') =>
+const water = ($: Engine, args = '', command = 'water') =>
   $.command.run({
-    command: 'water',
+    command,
     args,
     origin: { kind: 'composer' },
     presentation: { isFullscreen: true, columns: 120 },
@@ -126,7 +126,21 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await start($)
     await water($)
     const band = await mountBand($, surface)
-    expect(await band.find({ text: '青苔寶寶' })).toBeDefined()
+    expect(await band.find({ text: '☆ 今日進行中' })).toBeDefined()
+    expect(await band.find({ text: '青苔寶寶 · 累計達標 0 天' })).toBeDefined()
     expect(await band.find({ text: '咕嘟咕嘟～好喝！' })).toBeDefined()
   })
 }
+
+test('demo 播 10 秒今日完成預覽，不寫入紀錄', async ($, on) => {
+  const { clock } = engine(on)
+  await start($)
+  expect((await water($, 'demo', 'water-elf')).text).toContain('預覽')
+  const pane = await mountBand($, 'terminal')
+  expect(await pane.find({ text: '★ 今日完成 ★（預覽）' })).toBeDefined()
+  expect(await pane.find({ text: '💧 0 / 2000ml' })).toBeDefined()
+  // 同一個面板會隨狀態重畫，不用重新 mount
+  await clock.advance(10_200)
+  expect(await pane.find({ text: '☆ 今日進行中' })).toBeDefined()
+  expect(await pane.find({ text: '青苔寶寶 · 累計達標 0 天' })).toBeDefined()
+})
