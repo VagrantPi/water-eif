@@ -40,8 +40,10 @@ test('連續達標與進化', () => {
 test('像素格編碼：14x8 格，每格 12 bytes', () => {
   const cells = encode(frameOf('idle', 'blue', 0))
   expect(cells.length).toBe(Math.ceil((14 * 8 * 12) / 3) * 4)
-  // 口渴動畫停在攤平那格
-  expect(frameOf('thirsty', 'blue', 99)).toBe(frameOf('thirsty', 'blue', 6))
+  // 口渴動畫 0～6 播完，攤平那格多停 3 格（150ms × 3）再從頭播
+  expect(frameOf('thirsty', 'blue', 9)).toBe(frameOf('thirsty', 'blue', 6))
+  expect(frameOf('thirsty', 'blue', 10)).toBe(frameOf('thirsty', 'blue', 0))
+  expect(frameOf('thirsty', 'blue', 16)).toBe(frameOf('thirsty', 'blue', 6))
   expect(celebrate('blue', 0).length).toBe(Math.ceil((CELEBRATE_COLS * CELEBRATE_ROWS * 12) / 3) * 4)
 })
 
@@ -144,4 +146,16 @@ test('demo 播 10 秒今日完成預覽，不寫入紀錄', async ($, on) => {
   await clock.advance(10_200)
   expect(await pane.find({ text: '☆ 今日進行中' })).toBeDefined()
   expect(await pane.find({ text: '青苔寶寶 · 累計達標 0 天' })).toBeDefined()
+})
+
+test('demo 可指定心情，亂打會提示用法', async ($, on) => {
+  const { clock } = engine(on)
+  await start($)
+  expect((await water($, 'demo nope', 'water-elf')).text).toContain('用法')
+  expect((await water($, 'demo thirsty', 'water-elf')).text).toContain('thirsty')
+  const pane = await mountBand($, 'terminal')
+  expect(await pane.find({ text: '☆ 今日進行中（預覽）' })).toBeDefined()
+  expect(await pane.find({ text: '好渴…快融化了…' })).toBeDefined()
+  await clock.advance(10_200)
+  expect(await pane.find({ text: '在旁邊陪你寫 code' })).toBeDefined()
 })

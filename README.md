@@ -8,7 +8,7 @@
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)](https://docs.claude.com/en/docs/claude-code)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](.claude-plugin/plugin.json)
-[![Tests](https://img.shields.io/badge/tests-11%20passing-brightgreen)](hooks/water.test.ts)
+[![Tests](https://img.shields.io/badge/tests-12%20passing-brightgreen)](hooks/water.test.ts)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 
 [安裝](#-安裝) •
@@ -74,6 +74,7 @@
 | `/water 2` | 記 2 份，可用小數，例如 `/water 0.5`（上限 20） |
 | `/water-elf` | 顯示／隱藏右側精靈面板（會記住你的選擇） |
 | `/water-elf demo` | 預覽 10 秒「今日完成」慶祝畫面，不寫入紀錄 |
+| `/water-elf demo idle` | 預覽指定心情的動畫：`idle`／`happy`／`cheer`／`thirsty`／`done` |
 
 狀態列會常駐今日進度，例如 `💧 4/8 杯 (1000/2000ml)`。
 

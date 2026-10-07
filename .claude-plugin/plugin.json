@@ -1,6 +1,6 @@
 {
   "name": "water-elf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "養一隻喝水精靈：/water 記一杯，喝越多越開心、達標天數讓它進化",
   "userConfig": {
     "dailyGoalMl": {
